@@ -2,6 +2,11 @@ import { router } from '../router';
 import { createElement, clearElement } from '../utils/dom';
 import { pickDays, categorizeResults, PickResult } from '../almanac/pick-day';
 import { EVENT_WEIGHTS } from '../almanac/yiji';
+import { SHENG_XIAO } from '../almanac/constants';
+import {
+  loadPeople, addPerson, updatePerson, setPersonEnabled, removePerson,
+  loadCheckedIds, saveCheckedIds
+} from '../data/people';
 import html2canvas from 'html2canvas';
 
 export function renderPick(app: HTMLElement) {
@@ -54,12 +59,134 @@ export function renderPick(app: HTMLElement) {
     </div>
   `;
 
-  // 避讳
+  // 家人避讳：保存过的家人列成勾选清单，冲其属相的日期会被排除并注明
   const avoidSection = createElement('div', 'form-section');
-  avoidSection.innerHTML = `
-    <label>避讳生肖（可选，多选用逗号分隔）</label>
-    <input type="text" id="avoid-shengxiao" placeholder="如：鼠,马,鸡">
-  `;
+  const avoidLabel = createElement('label', '', '家人避讳（勾选后，冲其属相的日期将被排除并注明冲了谁）');
+  const peopleList = createElement('div', 'people-list');
+  const hint = createElement('div', 'form-hint');
+
+  const checkedIds = new Set<string>(loadCheckedIds());
+  const persistChecked = () => saveCheckedIds([...checkedIds]);
+
+  function renderPeopleList() {
+    clearElement(peopleList);
+    const people = loadPeople();
+
+    if (people.length === 0) {
+      peopleList.appendChild(
+        createElement('div', 'people-empty', '还没有保存的家人。在下方添加称呼和属相，之后每次择日直接勾选即可。')
+      );
+      return;
+    }
+
+    people.forEach(person => {
+      const row = createElement('div', `person-row${person.enabled ? '' : ' disabled'}`);
+
+      // 勾选参与本次择日
+      const checkLabel = createElement('label', 'person-check');
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = person.enabled && checkedIds.has(person.id);
+      checkbox.disabled = !person.enabled;
+      checkbox.addEventListener('change', () => {
+        if (checkbox.checked) checkedIds.add(person.id);
+        else checkedIds.delete(person.id);
+        persistChecked();
+      });
+      checkLabel.append(
+        checkbox,
+        createElement('span', 'person-name', person.name),
+        createElement('span', 'person-sx', `属${person.shengxiao}`)
+      );
+
+      // 改属相
+      const sxSelect = document.createElement('select');
+      sxSelect.className = 'person-sx-select';
+      sxSelect.title = '修改属相';
+      SHENG_XIAO.forEach(sx => {
+        const opt = document.createElement('option');
+        opt.value = sx;
+        opt.textContent = `属${sx}`;
+        if (sx === person.shengxiao) opt.selected = true;
+        sxSelect.appendChild(opt);
+      });
+      sxSelect.addEventListener('change', () => {
+        try {
+          updatePerson(person.id, { shengxiao: sxSelect.value });
+          hint.textContent = '';
+          renderPeopleList();
+        } catch (err) {
+          hint.textContent = (err as Error).message;
+        }
+      });
+
+      // 停用 / 启用
+      const toggleBtn = createElement('button', 'person-toggle', person.enabled ? '停用' : '启用');
+      toggleBtn.addEventListener('click', () => {
+        setPersonEnabled(person.id, !person.enabled);
+        if (person.enabled) {
+          checkedIds.delete(person.id);
+          persistChecked();
+        }
+        renderPeopleList();
+      });
+
+      // 删除
+      const delBtn = createElement('button', 'person-delete', '删除');
+      delBtn.addEventListener('click', () => {
+        if (!confirm(`确定把「${person.name}」从清单中删除吗？`)) return;
+        removePerson(person.id);
+        checkedIds.delete(person.id);
+        persistChecked();
+        renderPeopleList();
+      });
+
+      row.append(checkLabel, sxSelect, toggleBtn, delBtn);
+      peopleList.appendChild(row);
+    });
+  }
+
+  // 添加家人
+  const addRow = createElement('div', 'person-add');
+  const nameInput = document.createElement('input');
+  nameInput.type = 'text';
+  nameInput.placeholder = '称呼，如：爸爸';
+  nameInput.maxLength = 12;
+  const sxSelect = document.createElement('select');
+  const placeholderOpt = document.createElement('option');
+  placeholderOpt.value = '';
+  placeholderOpt.textContent = '选择属相';
+  placeholderOpt.disabled = true;
+  placeholderOpt.selected = true;
+  sxSelect.appendChild(placeholderOpt);
+  SHENG_XIAO.forEach(sx => {
+    const opt = document.createElement('option');
+    opt.value = sx;
+    opt.textContent = `属${sx}`;
+    sxSelect.appendChild(opt);
+  });
+  const addBtn = createElement('button', 'person-add-btn', '＋ 添加家人');
+  const doAdd = () => {
+    try {
+      const person = addPerson(nameInput.value, sxSelect.value);
+      checkedIds.add(person.id); // 新添加的家人默认参与本次择日
+      persistChecked();
+      nameInput.value = '';
+      sxSelect.value = '';
+      hint.textContent = '';
+      renderPeopleList();
+    } catch (err) {
+      hint.textContent = (err as Error).message;
+    }
+  };
+  addBtn.addEventListener('click', doAdd);
+  nameInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doAdd();
+  });
+  addRow.append(nameInput, sxSelect, addBtn);
+
+  avoidSection.append(avoidLabel, peopleList, addRow, hint);
+  renderPeopleList();
 
   // 提交按钮
   const submitBtn = createElement('button', 'submit-btn', '开始择日');
@@ -77,14 +204,17 @@ export function renderPick(app: HTMLElement) {
 
     const startDate = (document.getElementById('start-date') as HTMLInputElement).value;
     const endDate = (document.getElementById('end-date') as HTMLInputElement).value;
-    const avoidInput = (document.getElementById('avoid-shengxiao') as HTMLInputElement).value;
-    const avoidShengxiao = avoidInput.split(/[,，]/).map(s => s.trim()).filter(Boolean);
 
     const [sy, sm, sd] = startDate.split('-').map(Number);
     const [ey, em, ed] = endDate.split('-').map(Number);
 
+    // 勾选且未停用的家人参与避讳
+    const avoidPeople = loadPeople()
+      .filter(p => p.enabled && checkedIds.has(p.id))
+      .map(p => ({ name: p.name, shengxiao: p.shengxiao }));
+
     const startTime = performance.now();
-    const results = pickDays(sy, sm, sd, ey, em, ed, Array.from(selectedEvents), avoidShengxiao);
+    const results = pickDays(sy, sm, sd, ey, em, ed, Array.from(selectedEvents), [], avoidPeople);
     const endTime = performance.now();
 
     renderResults(resultArea, results, endTime - startTime);
@@ -96,7 +226,7 @@ export function renderPick(app: HTMLElement) {
 function renderResults(container: HTMLElement, results: PickResult[], elapsed: number) {
   clearElement(container);
 
-  const { best, good, normal, bad } = categorizeResults(results);
+  const { best, good, normal, bad, excluded } = categorizeResults(results);
 
   const stats = createElement('div', 'result-stats');
   stats.innerHTML = `
@@ -104,6 +234,7 @@ function renderResults(container: HTMLElement, results: PickResult[], elapsed: n
     <span>吉 ${good.length} 天</span>
     <span>平 ${normal.length} 天</span>
     <span>凶 ${bad.length} 天</span>
+    ${excluded.length > 0 ? `<span class="excluded-stat">已排除 ${excluded.length} 天</span>` : ''}
     <span class="elapsed">计算耗时 ${elapsed.toFixed(1)}ms</span>
   `;
   container.appendChild(stats);
@@ -128,6 +259,21 @@ function renderResults(container: HTMLElement, results: PickResult[], elapsed: n
     container.appendChild(goodSection);
   }
 
+  // 已排除：冲犯避讳的日期单独展示，注明冲了谁
+  if (excluded.length > 0) {
+    const excludedSection = createElement('div', 'result-section');
+    excludedSection.innerHTML = '<h3 class="section-title excluded">已排除 · 冲犯家人避讳</h3>';
+    const grid = createElement('div', 'result-grid');
+    excluded.slice(0, 30).forEach(r => grid.appendChild(createResultCard(r)));
+    excludedSection.appendChild(grid);
+    if (excluded.length > 30) {
+      excludedSection.appendChild(
+        createElement('div', 'result-more', `仅列出前 30 天，共排除 ${excluded.length} 天`)
+      );
+    }
+    container.appendChild(excludedSection);
+  }
+
   // 导出按钮
   const exportBtn = createElement('button', 'export-btn', '导出吉日清单') as HTMLButtonElement;
   exportBtn.addEventListener('click', () => {
@@ -142,22 +288,39 @@ function renderResults(container: HTMLElement, results: PickResult[], elapsed: n
 }
 
 function createResultCard(result: PickResult): HTMLElement {
+  const dateText = `${result.year}-${String(result.month).padStart(2, '0')}-${String(result.day).padStart(2, '0')}`;
+
+  if (result.excluded) {
+    // 被排除的日期：虚线灰底卡片 + 「避」标记，与低分日期明显区分
+    const card = createElement('div', 'result-card excluded');
+    const date = createElement('div', 'result-date', dateText);
+    const ganzhi = createElement('div', 'result-ganzhi', `${result.ganZhi}日 · 原评 ${result.score} 分`);
+    const badge = createElement('span', 'excluded-badge', '避');
+    const reason = createElement('div', 'result-reason', result.reason);
+    card.append(date, ganzhi, badge, reason);
+    card.addEventListener('click', () => {
+      router.navigate(`/day/${dateText}`);
+    });
+    return card;
+  }
+
   const card = createElement('div', `result-card score-${Math.floor(result.score / 20)}`);
   card.innerHTML = `
-    <div class="result-date">${result.year}-${String(result.month).padStart(2, '0')}-${String(result.day).padStart(2, '0')}</div>
+    <div class="result-date">${dateText}</div>
     <div class="result-ganzhi">${result.ganZhi}日</div>
     <div class="result-score">${result.score}分</div>
     <div class="result-reason">${result.reason}</div>
     <div class="result-yi">${result.yi.slice(0, 4).map(y => `<span>${y}</span>`).join('')}</div>
   `;
   card.addEventListener('click', () => {
-    router.navigate(`/day/${result.year}-${String(result.month).padStart(2, '0')}-${String(result.day).padStart(2, '0')}`);
+    router.navigate(`/day/${dateText}`);
   });
   return card;
 }
 
 async function exportResults(results: PickResult[]) {
-  const goodResults = results.filter(r => r.score >= 60).slice(0, 50);
+  // 被排除的日期不得进入吉日清单
+  const goodResults = results.filter(r => !r.excluded && r.score >= 60).slice(0, 50);
   if (goodResults.length === 0) {
     alert('没有可导出的吉日');
     return;

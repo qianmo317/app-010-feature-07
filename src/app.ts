@@ -415,6 +415,142 @@ function injectStyles() {
       font-size: 14px;
     }
 
+    /* 家人避讳清单 */
+    .people-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .person-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+    }
+
+    .person-row.disabled {
+      opacity: 0.55;
+    }
+
+    .form-section .person-check {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 140px;
+      margin-bottom: 0;
+      font-weight: normal;
+      color: var(--text);
+      cursor: pointer;
+    }
+
+    .person-check input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+
+    .person-name {
+      font-weight: bold;
+    }
+
+    .person-sx {
+      font-size: 12px;
+      color: var(--primary);
+      background: #f3e9d7;
+      padding: 2px 8px;
+      border-radius: 10px;
+    }
+
+    .person-sx-select {
+      padding: 4px 6px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 13px;
+      background: white;
+    }
+
+    .person-toggle, .person-delete {
+      padding: 4px 10px;
+      font-size: 12px;
+      border-radius: 4px;
+      cursor: pointer;
+      background: white;
+      border: 1px solid var(--border);
+      color: var(--text-light);
+    }
+
+    .person-toggle:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .person-delete {
+      color: var(--accent);
+      border-color: var(--accent);
+    }
+
+    .person-delete:hover {
+      background: var(--accent);
+      color: white;
+    }
+
+    .person-add {
+      display: flex;
+      gap: 8px;
+      margin-top: 10px;
+    }
+
+    .person-add input {
+      flex: 1;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    .person-add select {
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 14px;
+      background: white;
+    }
+
+    .person-add-btn {
+      padding: 8px 16px;
+      background: var(--primary);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .person-add-btn:hover {
+      background: var(--primary-light);
+    }
+
+    .people-empty {
+      font-size: 13px;
+      color: var(--text-light);
+    }
+
+    .form-hint {
+      color: var(--accent);
+      font-size: 13px;
+      margin-top: 6px;
+    }
+
+    .form-hint:empty {
+      display: none;
+    }
+
     .submit-btn {
       width: 100%;
       padding: 14px;
@@ -462,6 +598,7 @@ function injectStyles() {
 
     .section-title.best { color: var(--accent); border-color: var(--accent); }
     .section-title.good { color: var(--secondary); border-color: var(--secondary); }
+    .section-title.excluded { color: #8a6d3b; border-color: #8a6d3b; }
 
     .result-grid {
       display: grid;
@@ -485,6 +622,44 @@ function injectStyles() {
 
     .result-card.score-4 { border-color: var(--accent); background: #fff0f0; }
     .result-card.score-3 { border-color: var(--secondary); background: #f0f8f0; }
+
+    /* 被排除的日期：虚线灰底 + 「避」标记，与单纯低分日期区分 */
+    .result-card.excluded {
+      border-style: dashed;
+      border-color: #b8a88a;
+      background: #f0eadf;
+    }
+
+    .result-card.excluded:hover {
+      border-color: #8a6d3b;
+    }
+
+    .result-card.excluded .result-reason {
+      color: #8a6d3b;
+      font-weight: bold;
+    }
+
+    .excluded-badge {
+      display: inline-block;
+      background: #8a6d3b;
+      color: #fff;
+      border-radius: 4px;
+      padding: 2px 8px;
+      font-size: 12px;
+      margin: 4px 0;
+    }
+
+    .result-stats .excluded-stat {
+      background: #f0eadf;
+      color: #8a6d3b;
+      border: 1px dashed #b8a88a;
+    }
+
+    .result-more {
+      font-size: 13px;
+      color: var(--text-light);
+      margin-top: 8px;
+    }
 
     .result-date {
       font-weight: bold;
